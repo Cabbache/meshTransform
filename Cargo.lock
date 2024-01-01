@@ -134,7 +134,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "meshTransform"
+name = "mesh_transform"
 version = "0.1.0"
 dependencies = [
  "clap",

@@ -13,6 +13,17 @@ enum Commands {
 		#[clap(allow_hyphen_values = true)]
 		dz: f32,
 	},
+	/// Rotates object
+	Rotate {
+		#[clap(allow_hyphen_values = true)]
+		x: f32,
+		#[clap(allow_hyphen_values = true)]
+		y: f32,
+		#[clap(allow_hyphen_values = true)]
+		z: f32,
+		#[clap(allow_hyphen_values = true)]
+		angle: f32,
+	},
 	/// Warps object
 	Warp,
 }
@@ -133,14 +144,31 @@ impl Transformer for WarpTransformer {
 }
 
 struct TranslateTransformer {
-	dx: f32,
-	dy: f32,
-	dz: f32,
+	xyz: Vector3<f32>
 }
 
 impl Transformer for TranslateTransformer {
 	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
-		pt + Vector3::new(self.dx, self.dy, self.dz)
+		pt + self.xyz
+	}
+}
+
+struct RotateTransformer {
+	axis: Vector3<f32>,
+	angle: f32
+}
+
+impl Transformer for RotateTransformer {
+	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
+		let u = self.axis.normalize();
+		let sin_angle = self.angle.sin();
+		let cos_angle = self.angle.cos();
+
+		let term1 = pt.scale(cos_angle);
+		let term2 = u.cross(&pt).scale(sin_angle);
+		let term3 = u.scale(u.dot(&pt) * (1.0 - cos_angle));
+
+		term1 + term2 + term3
 	}
 }
 
@@ -149,11 +177,13 @@ fn main() {
 
 	let transformer: Box<dyn Transformer> = match args.command {
 		Commands::Translate { dx, dy, dz } => Box::new(TranslateTransformer {
-			dx: dx,
-			dy: dy,
-			dz: dz,
+			xyz: Vector3::new(dx, dy, dz)
 		}),
 		Commands::Warp => Box::new(WarpTransformer::new()),
+		Commands::Rotate {x,y,z,angle}=> Box::new(RotateTransformer {
+			axis: Vector3::new(x,y,z),
+			angle: angle
+		})
 	};
 
 	let stdin = io::stdin();
