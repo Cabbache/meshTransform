@@ -6,8 +6,11 @@ use nalgebra::{Matrix3, Isometry3, Rotation3, Translation3, Unit, Vector3};
 enum Commands {
 	/// Translates object
 	Translate {
+		#[clap(allow_hyphen_values = true)]
 		dx: f32,
+		#[clap(allow_hyphen_values = true)]
 		dy: f32,
+		#[clap(allow_hyphen_values = true)]
 		dz: f32,
 	},
 	/// Warps object
@@ -36,7 +39,6 @@ fn perpendicular_distance(point: Vector3<f32>, line: (Vector3<f32>, Vector3<f32>
 }
 
 fn create_transformation_matrix(line1: (Vector3<f32>, Vector3<f32>), line2: (Vector3<f32>, Vector3<f32>)) -> Isometry3<f32> {
-    // Calculate the direction of each line
     let dir1 = Unit::new_normalize(line1.1 - line1.0);
     let dir2 = Unit::new_normalize(line2.1 - line2.0);
 
@@ -110,7 +112,12 @@ impl WarpTransformer {
 
 impl Transformer for WarpTransformer {
 	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
-		Vector3::new(0f32,0f32,0f32)
+		let weights: Vec<f32> = self.lines.iter()
+		 .map(|&line| perpendicular_distance(pt, line))
+		.collect();
+
+		let interpolated_transform = interpolate_transforms(&self.transforms, &weights);
+		interpolated_transform * pt
 	}
 }
 
@@ -122,7 +129,7 @@ struct TranslateTransformer {
 
 impl Transformer for TranslateTransformer {
 	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
-		Vector3::new(0f32,0f32,0f32)
+		pt + Vector3::new(self.dx, self.dy, self.dz)
 	}
 }
 
@@ -148,18 +155,9 @@ fn main() {
 			let y = words[2].parse::<f32>().unwrap();
 			let z = words[3].parse::<f32>().unwrap();
 
-			let point = transformer.transform(Vector3::new(x,y,z));
-			//let weights: Vec<f32> = lines.iter()
-      // .map(|&line| perpendicular_distance(point, line))
-      //.collect();
-
-//			let interpolated_transform = interpolate_transforms(&transforms, &weights);
-
-//			let mut vertice = Vector3::new(x, y, z);
-//			vertice = interpolated_transform * vertice;
-			
-
-			println!("v {} {} {}", point.x, point.y, point.z);
+			let output = transformer.transform(Vector3::new(x,y,z));
+		
+			println!("v {} {} {}", output.x, output.y, output.z);
 		} else {
 			println!("{}", text_line);
 		}
