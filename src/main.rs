@@ -1,5 +1,25 @@
+use clap::{Parser, Subcommand};
 use std::io::{self, BufRead};
 use nalgebra::{Matrix3, Isometry3, Rotation3, Translation3, Unit, Vector3};
+
+#[derive(Subcommand)]
+enum Commands {
+	/// Translates object
+	Translate {
+		dx: f32,
+		dy: f32,
+		dz: f32,
+	},
+	/// Warps object
+	Warp
+}
+
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+	#[clap(subcommand)]
+	command: Commands
+}
 
 fn perpendicular_distance(point: Vector3<f32>, line: (Vector3<f32>, Vector3<f32>)) -> f32 {
     let (a, b) = line;
@@ -57,19 +77,66 @@ fn interpolate_transforms(transforms: &[Matrix3<f32>], weights: &[f32]) -> Matri
     result
 }
 
-fn main() {
-	let rotation_angle = 90.0_f32.to_radians();
-	let line1 = (Vector3::zeros(), Vector3::x());
-	let rotation = Rotation3::from_axis_angle(&Vector3::z_axis(), rotation_angle);
-	let line2 = (Vector3::zeros(), rotation * line1.1);
-	let rotation = Rotation3::from_axis_angle(&Vector3::y_axis(), rotation_angle);
-	let line3 = (Vector3::zeros(), rotation * line2.1);
-	let lines = vec![line1, line2, line3];
+trait Transformer {
+	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32>;
+}
 
-	let transforms: Vec<Matrix3<f32>> = create_transformation_matrices(lines.clone())
-		.iter()
-		.map(|isometry| isometry.rotation.to_rotation_matrix().matrix().clone())
-		.collect();
+struct WarpTransformer {
+	lines: Vec<(Vector3<f32>, Vector3<f32>)>,
+	transforms: Vec<Matrix3<f32>>,
+}
+
+impl WarpTransformer {
+	fn new() -> Self {
+		let rotation_angle = 90.0_f32.to_radians();
+		let line1 = (Vector3::zeros(), Vector3::x());
+		let rotation = Rotation3::from_axis_angle(&Vector3::z_axis(), rotation_angle);
+		let line2 = (Vector3::zeros(), rotation * line1.1);
+		let rotation = Rotation3::from_axis_angle(&Vector3::y_axis(), rotation_angle);
+		let line3 = (Vector3::zeros(), rotation * line2.1);
+		let lines = vec![line1, line2, line3];
+
+		let transforms: Vec<Matrix3<f32>> = create_transformation_matrices(lines.clone())
+			.iter()
+			.map(|isometry| isometry.rotation.to_rotation_matrix().matrix().clone())
+			.collect();	
+
+		WarpTransformer {
+			lines: lines,
+			transforms: transforms
+		}
+	}
+}
+
+impl Transformer for WarpTransformer {
+	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
+		Vector3::new(0f32,0f32,0f32)
+	}
+}
+
+struct TranslateTransformer {
+	dx: f32,
+	dy: f32,
+	dz: f32,
+}
+
+impl Transformer for TranslateTransformer {
+	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
+		Vector3::new(0f32,0f32,0f32)
+	}
+}
+
+fn main() {
+	let args = Args::parse();
+
+	let transformer: Box<dyn Transformer> = match args.command {
+		Commands::Translate{dx, dy ,dz} => Box::new(TranslateTransformer {
+			dx: dx,
+			dy: dy,
+			dz: dz,
+		}),
+		Commands::Warp => Box::new(WarpTransformer::new())
+	};
 
 	let stdin = io::stdin();
 	for text_line in stdin.lock().lines() {
@@ -81,17 +148,18 @@ fn main() {
 			let y = words[2].parse::<f32>().unwrap();
 			let z = words[3].parse::<f32>().unwrap();
 
-			let point = Vector3::new(x,y,z);
-			let weights: Vec<f32> = lines.iter()
-        .map(|&line| perpendicular_distance(point, line))
-        .collect();
+			let point = transformer.transform(Vector3::new(x,y,z));
+			//let weights: Vec<f32> = lines.iter()
+      // .map(|&line| perpendicular_distance(point, line))
+      //.collect();
 
-			let interpolated_transform = interpolate_transforms(&transforms, &weights);
+//			let interpolated_transform = interpolate_transforms(&transforms, &weights);
 
-			let mut vertice = Vector3::new(x, y, z);
-			vertice = interpolated_transform * vertice;
+//			let mut vertice = Vector3::new(x, y, z);
+//			vertice = interpolated_transform * vertice;
+			
 
-			println!("v {} {} {}", vertice.x, vertice.y, vertice.z);
+			println!("v {} {} {}", point.x, point.y, point.z);
 		} else {
 			println!("{}", text_line);
 		}
