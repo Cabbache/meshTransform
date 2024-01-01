@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
+use nalgebra::{Isometry3, Matrix3, Rotation3, Translation3, Unit, Vector3};
 use std::io::{self, BufRead};
-use nalgebra::{Matrix3, Isometry3, Rotation3, Translation3, Unit, Vector3};
 
 #[derive(Subcommand)]
 enum Commands {
@@ -14,17 +14,15 @@ enum Commands {
 		dz: f32,
 	},
 	/// Warps object
-	Warp
+	Warp,
 }
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
 	#[clap(subcommand)]
-	command: Commands
+	command: Commands,
 }
-
-
 
 trait Transformer {
 	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32>;
@@ -48,75 +46,86 @@ impl WarpTransformer {
 		let transforms: Vec<Matrix3<f32>> = Self::create_transformation_matrices(lines.clone())
 			.iter()
 			.map(|isometry| isometry.rotation.to_rotation_matrix().matrix().clone())
-			.collect();	
+			.collect();
 
 		WarpTransformer {
 			lines: lines,
-			transforms: transforms
+			transforms: transforms,
 		}
 	}
 
 	fn perpendicular_distance(point: Vector3<f32>, line: (Vector3<f32>, Vector3<f32>)) -> f32 {
-			let (a, b) = line;
-			let ab = b - a;
-			let ap = point - a;
+		let (a, b) = line;
+		let ab = b - a;
+		let ap = point - a;
 
-			let magnitude_ab = ab.magnitude();
-			let projection_length = ap.dot(&ab) / (magnitude_ab * magnitude_ab);
-			let projection = ab * projection_length;
+		let magnitude_ab = ab.magnitude();
+		let projection_length = ap.dot(&ab) / (magnitude_ab * magnitude_ab);
+		let projection = ab * projection_length;
 
-			let perpendicular = ap - projection;
+		let perpendicular = ap - projection;
 
-			perpendicular.magnitude()
+		perpendicular.magnitude()
 	}
 
-	fn create_transformation_matrix(line1: (Vector3<f32>, Vector3<f32>), line2: (Vector3<f32>, Vector3<f32>)) -> Isometry3<f32> {
-			let dir1 = Unit::new_normalize(line1.1 - line1.0);
-			let dir2 = Unit::new_normalize(line2.1 - line2.0);
+	fn create_transformation_matrix(
+		line1: (Vector3<f32>, Vector3<f32>),
+		line2: (Vector3<f32>, Vector3<f32>),
+	) -> Isometry3<f32> {
+		let dir1 = Unit::new_normalize(line1.1 - line1.0);
+		let dir2 = Unit::new_normalize(line2.1 - line2.0);
 
-			// Calculate the rotation required to align line2 with line1
-			let rotation = Rotation3::rotation_between(&dir2, &dir1).unwrap();
+		// Calculate the rotation required to align line2 with line1
+		let rotation = Rotation3::rotation_between(&dir2, &dir1).unwrap();
 
-			// Calculate the translation required to move the start of line2 to line1
-			let translation = Translation3::from(line1.0 - line2.0);
+		// Calculate the translation required to move the start of line2 to line1
+		let translation = Translation3::from(line1.0 - line2.0);
 
-			// Combine the translation and rotation into a single transformation
-			Isometry3::from_parts(translation, rotation.into())
+		// Combine the translation and rotation into a single transformation
+		Isometry3::from_parts(translation, rotation.into())
 	}
 
-	fn create_transformation_matrices(lines: Vec<(Vector3<f32>, Vector3<f32>)>) -> Vec<Isometry3<f32>> {
-			let first_line = lines[0];
+	fn create_transformation_matrices(
+		lines: Vec<(Vector3<f32>, Vector3<f32>)>,
+	) -> Vec<Isometry3<f32>> {
+		let first_line = lines[0];
 
-			let mut transformation_matrices = Vec::new();
-			for line in lines {
-					let matrix = Self::create_transformation_matrix(first_line, line);
-					transformation_matrices.push(matrix);
-			}
+		let mut transformation_matrices = Vec::new();
+		for line in lines {
+			let matrix = Self::create_transformation_matrix(first_line, line);
+			transformation_matrices.push(matrix);
+		}
 
-			transformation_matrices
+		transformation_matrices
 	}
 
 	fn interpolate_transforms(transforms: &[Matrix3<f32>], weights: &[f32]) -> Matrix3<f32> {
-			assert_eq!(transforms.len(), weights.len(), "The number of transforms and weights must be the same");
+		assert_eq!(
+			transforms.len(),
+			weights.len(),
+			"The number of transforms and weights must be the same"
+		);
 
-			let mut result = Matrix3::zeros();
-			let sum_weights: f32 = weights.iter().sum();
+		let mut result = Matrix3::zeros();
+		let sum_weights: f32 = weights.iter().sum();
 
-			for (transform, &weight) in transforms.iter().zip(weights.iter()) {
-					result += transform * weight;
-			}
+		for (transform, &weight) in transforms.iter().zip(weights.iter()) {
+			result += transform * weight;
+		}
 
-			result /= sum_weights;
+		result /= sum_weights;
 
-			result
+		result
 	}
 }
 
 impl Transformer for WarpTransformer {
 	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
-		let weights: Vec<f32> = self.lines.iter()
-		 .map(|&line| Self::perpendicular_distance(pt, line))
-		.collect();
+		let weights: Vec<f32> = self
+			.lines
+			.iter()
+			.map(|&line| Self::perpendicular_distance(pt, line))
+			.collect();
 
 		let interpolated_transform = Self::interpolate_transforms(&self.transforms, &weights);
 		interpolated_transform * pt
@@ -139,12 +148,12 @@ fn main() {
 	let args = Args::parse();
 
 	let transformer: Box<dyn Transformer> = match args.command {
-		Commands::Translate{dx, dy ,dz} => Box::new(TranslateTransformer {
+		Commands::Translate { dx, dy, dz } => Box::new(TranslateTransformer {
 			dx: dx,
 			dy: dy,
 			dz: dz,
 		}),
-		Commands::Warp => Box::new(WarpTransformer::new())
+		Commands::Warp => Box::new(WarpTransformer::new()),
 	};
 
 	let stdin = io::stdin();
@@ -160,8 +169,8 @@ fn main() {
 		let x = words[1].parse::<f32>().unwrap();
 		let y = words[2].parse::<f32>().unwrap();
 		let z = words[3].parse::<f32>().unwrap();
-		let output = transformer.transform(Vector3::new(x,y,z));
-	
+		let output = transformer.transform(Vector3::new(x, y, z));
+
 		println!("v {} {} {}", output.x, output.y, output.z);
 	}
 }
