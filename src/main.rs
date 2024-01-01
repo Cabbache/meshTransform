@@ -150,16 +150,16 @@ fn main() {
 		let text_line = text_line.unwrap();
 		let words: Vec<&str> = text_line.split_whitespace().collect();
 
-		if words[0] == "v" && words.len() == 4 {
-			let x = words[1].parse::<f32>().unwrap();
-			let y = words[2].parse::<f32>().unwrap();
-			let z = words[3].parse::<f32>().unwrap();
-
-			let output = transformer.transform(Vector3::new(x,y,z));
-		
-			println!("v {} {} {}", output.x, output.y, output.z);
-		} else {
+		if words[0] != "v" || words.len() != 4 {
 			println!("{}", text_line);
+			continue;
 		}
+
+		let x = words[1].parse::<f32>().unwrap();
+		let y = words[2].parse::<f32>().unwrap();
+		let z = words[3].parse::<f32>().unwrap();
+		let output = transformer.transform(Vector3::new(x,y,z));
+	
+		println!("v {} {} {}", output.x, output.y, output.z);
 	}
 }
