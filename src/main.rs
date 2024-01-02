@@ -24,6 +24,14 @@ enum Commands {
 		#[clap(allow_hyphen_values = true)]
 		angle: f32,
 	},
+	Scale {
+		#[clap(allow_hyphen_values = true)]
+		x: f32,
+		#[clap(allow_hyphen_values = true)]
+		y: f32,
+		#[clap(allow_hyphen_values = true)]
+		z: f32,	
+	},
 	/// Warps object
 	Warp,
 }
@@ -172,6 +180,20 @@ impl Transformer for RotateTransformer {
 	}
 }
 
+struct ScaleTransformer {
+	xyz: Vector3<f32>
+}
+
+impl Transformer for ScaleTransformer {
+	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
+		Vector3::new(
+			pt.x * self.xyz.x,
+			pt.y * self.xyz.y,
+			pt.z * self.xyz.z,
+		)
+	}
+}
+
 fn main() {
 	let args = Args::parse();
 
@@ -179,11 +201,14 @@ fn main() {
 		Commands::Translate { dx, dy, dz } => Box::new(TranslateTransformer {
 			xyz: Vector3::new(dx, dy, dz)
 		}),
-		Commands::Warp => Box::new(WarpTransformer::new()),
-		Commands::Rotate {x,y,z,angle}=> Box::new(RotateTransformer {
+		Commands::Rotate {x,y,z,angle} => Box::new(RotateTransformer {
 			axis: Vector3::new(x,y,z),
 			angle: angle
-		})
+		}),
+		Commands::Scale {x,y,z} => Box::new(ScaleTransformer{
+			xyz: Vector3::new(x,y,z)
+		}),
+		Commands::Warp => Box::new(WarpTransformer::new()),
 	};
 
 	let stdin = io::stdin();
@@ -191,7 +216,7 @@ fn main() {
 		let text_line = text_line.unwrap();
 		let words: Vec<&str> = text_line.split_whitespace().collect();
 
-		if words[0] != "v" || words.len() != 4 {
+		if words[0] != "v" && words[0] != "vertex" || words.len() != 4 {
 			println!("{}", text_line);
 			continue;
 		}
@@ -201,6 +226,6 @@ fn main() {
 		let z = words[3].parse::<f32>().unwrap();
 		let output = transformer.transform(Vector3::new(x, y, z));
 
-		println!("v {} {} {}", output.x, output.y, output.z);
+		println!("{} {} {} {}", words[0], output.x, output.y, output.z);
 	}
 }
