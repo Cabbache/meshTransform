@@ -33,7 +33,7 @@ enum Commands {
 		#[clap(allow_hyphen_values = true)]
 		z: f32,	
 	},
-	/// Warps object
+	/// Warps object. This transformation is non-linear
 	Warp,
 }
 
