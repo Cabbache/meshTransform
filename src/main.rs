@@ -24,6 +24,7 @@ enum Commands {
 		#[clap(allow_hyphen_values = true)]
 		angle: f32,
 	},
+	/// Scales object
 	Scale {
 		#[clap(allow_hyphen_values = true)]
 		x: f32,
