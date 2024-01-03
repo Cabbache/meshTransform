@@ -135,7 +135,7 @@ impl WarpTransformer {
 		let sum_weights: f32 = weights.iter().sum();
 
 		for (transform, &weight) in transforms.iter().zip(weights.iter()) {
-			result += transform * weight; //TODO this isn't right
+			result += transform * weight;
 		}
 
 		result /= sum_weights;
@@ -149,7 +149,7 @@ impl Transformer for WarpTransformer {
 		let weights: Vec<f32> = self
 			.lines
 			.iter()
-			.map(|&line| Self::perpendicular_distance(pt, line))
+			.map(|&line| 1f32 / Self::perpendicular_distance(pt, line).powi(2))
 			.collect();
 
 		let interpolated_transform = Self::interpolate_transforms(&self.transforms, &weights);
