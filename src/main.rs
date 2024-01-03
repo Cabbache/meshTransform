@@ -49,7 +49,7 @@ enum Commands {
 		#[clap(allow_hyphen_values = true, value_parser = parse_vector3, value_name="vector", help="vector with comma separated values")]
 		scale: Vector3<f32>,
 	},
-	/// Warps object. This transformation is non-linear
+	/// Non linear warp by interpolation
 	Warp {
 		#[clap(long, allow_hyphen_values = true, value_parser = parse_line, long="line", value_name="line", help="Specifies a line with two vectors. Should be used multiple times")]
 		lines: Vec<Line>,
