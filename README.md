@@ -12,7 +12,7 @@ Commands:
   translate  Translates object
   rotate     Rotates object
   scale      Scales object
-  warp       Warps object. This transformation is non-linear
+  warp       Non linear warp by interpolation
   help       Print this message or the help of the given subcommand(s)
 
 Options:
