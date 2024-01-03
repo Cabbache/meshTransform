@@ -39,14 +39,14 @@ enum Commands {
 	},
 	/// Rotates object
 	Rotate {
-		#[clap(allow_hyphen_values = true, value_parser = parse_vector3)]
+		#[clap(allow_hyphen_values = true, value_parser = parse_vector3, value_name="vector", help="vector with comma separated values")]
 		axis: Vector3<f32>,
 		#[clap(allow_hyphen_values = true)]
 		angle: f32,
 	},
 	/// Scales object
 	Scale {
-		#[clap(allow_hyphen_values = true, value_parser = parse_vector3)]
+		#[clap(allow_hyphen_values = true, value_parser = parse_vector3, value_name="vector", help="vector with comma separated values")]
 		scale: Vector3<f32>,
 	},
 	/// Warps object. This transformation is non-linear
