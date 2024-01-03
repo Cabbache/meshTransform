@@ -2,39 +2,58 @@ use clap::{Parser, Subcommand};
 use nalgebra::{Isometry3, Matrix3, Rotation3, Translation3, Unit, Vector3};
 use std::io::{self, BufRead};
 
+#[derive(Clone, Copy)]
+struct Line {
+	origin: Vector3<f32>,
+	heading: Vector3<f32>,
+}
+
+fn parse_vector3(s: &str) -> Result<Vector3<f32>, &'static str> {
+	let parts: Vec<&str> = s.split(',').collect();
+	if parts.len() != 3 {
+		return Err("Each vector must have exactly three coordinates");
+	}
+	let coords: Result<Vec<f32>, _> = parts.iter().map(|&num| num.parse::<f32>()).collect();
+	match coords {
+		Ok(coords) if coords.len() == 3 => Ok(Vector3::new(coords[0], coords[1], coords[2])),
+		_ => Err("Invalid vector format"),
+	}
+}
+
+fn parse_line(s: &str) -> Result<Line, &'static str> {
+	let vectors: Vec<&str> = s.split_whitespace().collect();
+	if vectors.len() != 2 {
+		return Err("Each line must be defined by exactly two vectors");
+	}
+	let origin = parse_vector3(vectors[0])?;
+	let heading = parse_vector3(vectors[1])?;
+	Ok(Line { origin, heading })
+}
+
 #[derive(Subcommand)]
 enum Commands {
 	/// Translates object
 	Translate {
-		#[clap(allow_hyphen_values = true)]
-		dx: f32,
-		#[clap(allow_hyphen_values = true)]
-		dy: f32,
-		#[clap(allow_hyphen_values = true)]
-		dz: f32,
+		#[clap(allow_hyphen_values = true, value_parser = parse_vector3, value_name="vector", help="vector with comma separated values")]
+		translation: Vector3<f32>,
 	},
 	/// Rotates object
 	Rotate {
-		#[clap(allow_hyphen_values = true)]
-		x: f32,
-		#[clap(allow_hyphen_values = true)]
-		y: f32,
-		#[clap(allow_hyphen_values = true)]
-		z: f32,
+		#[clap(allow_hyphen_values = true, value_parser = parse_vector3)]
+		axis: Vector3<f32>,
 		#[clap(allow_hyphen_values = true)]
 		angle: f32,
 	},
 	/// Scales object
 	Scale {
-		#[clap(allow_hyphen_values = true)]
-		x: f32,
-		#[clap(allow_hyphen_values = true)]
-		y: f32,
-		#[clap(allow_hyphen_values = true)]
-		z: f32,	
+		#[clap(allow_hyphen_values = true, value_parser = parse_vector3)]
+		scale: Vector3<f32>,
 	},
 	/// Warps object. This transformation is non-linear
-	Warp,
+	Warp {
+		#[clap(long, allow_hyphen_values = true, value_parser = parse_line, long="line", value_name="line", help="Specifies a line with two vectors. Should be used multiple times")]
+		lines: Vec<Line>,
+	},
 }
 
 #[derive(Parser)]
@@ -49,20 +68,12 @@ trait Transformer {
 }
 
 struct WarpTransformer {
-	lines: Vec<(Vector3<f32>, Vector3<f32>)>,
+	lines: Vec<Line>,
 	transforms: Vec<Matrix3<f32>>,
 }
 
 impl WarpTransformer {
-	fn new() -> Self {
-		let rotation_angle = 90.0_f32.to_radians();
-		let line1 = (Vector3::zeros(), Vector3::x());
-		let rotation = Rotation3::from_axis_angle(&Vector3::z_axis(), rotation_angle);
-		let line2 = (Vector3::zeros(), rotation * line1.1);
-		let rotation = Rotation3::from_axis_angle(&Vector3::y_axis(), rotation_angle);
-		let line3 = (Vector3::zeros(), rotation * line2.1);
-		let lines = vec![line1, line2, line3];
-
+	fn new(lines: Vec<Line>) -> Self {
 		let transforms: Vec<Matrix3<f32>> = Self::create_transformation_matrices(lines.clone())
 			.iter()
 			.map(|isometry| isometry.rotation.to_rotation_matrix().matrix().clone())
@@ -74,10 +85,9 @@ impl WarpTransformer {
 		}
 	}
 
-	fn perpendicular_distance(point: Vector3<f32>, line: (Vector3<f32>, Vector3<f32>)) -> f32 {
-		let (a, b) = line;
-		let ab = b - a;
-		let ap = point - a;
+	fn perpendicular_distance(point: Vector3<f32>, line: Line) -> f32 {
+		let ab = line.heading - line.origin;
+		let ap = point - line.origin;
 
 		let magnitude_ab = ab.magnitude();
 		let projection_length = ap.dot(&ab) / (magnitude_ab * magnitude_ab);
@@ -88,26 +98,21 @@ impl WarpTransformer {
 		perpendicular.magnitude()
 	}
 
-	fn create_transformation_matrix(
-		line1: (Vector3<f32>, Vector3<f32>),
-		line2: (Vector3<f32>, Vector3<f32>),
-	) -> Isometry3<f32> {
-		let dir1 = Unit::new_normalize(line1.1 - line1.0);
-		let dir2 = Unit::new_normalize(line2.1 - line2.0);
+	fn create_transformation_matrix(line1: Line, line2: Line) -> Isometry3<f32> {
+		let dir1 = Unit::new_normalize(line1.heading - line1.origin);
+		let dir2 = Unit::new_normalize(line2.heading - line2.origin);
 
 		// Calculate the rotation required to align line2 with line1
 		let rotation = Rotation3::rotation_between(&dir2, &dir1).unwrap();
 
 		// Calculate the translation required to move the start of line2 to line1
-		let translation = Translation3::from(line1.0 - line2.0);
+		let translation = Translation3::from(line1.origin - line2.origin);
 
 		// Combine the translation and rotation into a single transformation
 		Isometry3::from_parts(translation, rotation.into())
 	}
 
-	fn create_transformation_matrices(
-		lines: Vec<(Vector3<f32>, Vector3<f32>)>,
-	) -> Vec<Isometry3<f32>> {
+	fn create_transformation_matrices(lines: Vec<Line>) -> Vec<Isometry3<f32>> {
 		let first_line = lines[0];
 
 		let mut transformation_matrices = Vec::new();
@@ -130,7 +135,7 @@ impl WarpTransformer {
 		let sum_weights: f32 = weights.iter().sum();
 
 		for (transform, &weight) in transforms.iter().zip(weights.iter()) {
-			result += transform * weight;
+			result += transform * weight; //TODO this isn't right
 		}
 
 		result /= sum_weights;
@@ -153,7 +158,7 @@ impl Transformer for WarpTransformer {
 }
 
 struct TranslateTransformer {
-	xyz: Vector3<f32>
+	xyz: Vector3<f32>,
 }
 
 impl Transformer for TranslateTransformer {
@@ -164,7 +169,7 @@ impl Transformer for TranslateTransformer {
 
 struct RotateTransformer {
 	axis: Vector3<f32>,
-	angle: f32
+	angle: f32,
 }
 
 impl Transformer for RotateTransformer {
@@ -182,16 +187,12 @@ impl Transformer for RotateTransformer {
 }
 
 struct ScaleTransformer {
-	xyz: Vector3<f32>
+	xyz: Vector3<f32>,
 }
 
 impl Transformer for ScaleTransformer {
 	fn transform(&self, pt: Vector3<f32>) -> Vector3<f32> {
-		Vector3::new(
-			pt.x * self.xyz.x,
-			pt.y * self.xyz.y,
-			pt.z * self.xyz.z,
-		)
+		Vector3::new(pt.x * self.xyz.x, pt.y * self.xyz.y, pt.z * self.xyz.z)
 	}
 }
 
@@ -199,17 +200,29 @@ fn main() {
 	let args = Args::parse();
 
 	let transformer: Box<dyn Transformer> = match args.command {
-		Commands::Translate { dx, dy, dz } => Box::new(TranslateTransformer {
-			xyz: Vector3::new(dx, dy, dz)
+		Commands::Rotate { axis, angle } => Box::new(RotateTransformer {
+			axis: axis,
+			angle: angle,
 		}),
-		Commands::Rotate {x,y,z,angle} => Box::new(RotateTransformer {
-			axis: Vector3::new(x,y,z),
-			angle: angle
-		}),
-		Commands::Scale {x,y,z} => Box::new(ScaleTransformer{
-			xyz: Vector3::new(x,y,z)
-		}),
-		Commands::Warp => Box::new(WarpTransformer::new()),
+		Commands::Translate { translation } => Box::new(TranslateTransformer { xyz: translation }),
+		Commands::Scale { scale } => Box::new(ScaleTransformer { xyz: scale }),
+		Commands::Warp { lines } => Box::new(WarpTransformer::new(match lines.len() {
+			0 => vec![
+				Line {
+					origin: Vector3::new(0f32, 0f32, 0f32),
+					heading: Vector3::new(1f32, 0f32, 0f32),
+				},
+				Line {
+					origin: Vector3::new(0f32, 0f32, 0f32),
+					heading: Vector3::new(0f32, 0f32, 1f32),
+				},
+			],
+			1 => {
+				eprintln!("A minimum of two lines is required.");
+				return;
+			}
+			_ => lines,
+		})),
 	};
 
 	let stdin = io::stdin();

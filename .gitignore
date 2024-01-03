@@ -1,3 +1,5 @@
 /target
 *.obj
 *.gif
+*.png
+*.stl
