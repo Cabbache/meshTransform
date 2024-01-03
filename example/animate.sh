@@ -6,9 +6,9 @@ function render()
 	$BIN scale 0.55 0.55 0.55 < cow.stl |
 	$BIN translate $1 0.3 0 |
 	$BIN warp \
-	> cow_out$CTR.stl && \
-	python3 render.py cow_out$CTR.stl && \
-	rm cow_out$CTR.stl
+	> cow_out$2.stl && \
+	python3 render.py cow_out$2.stl && \
+	rm cow_out$2.stl
 }
 
 CTR=0
